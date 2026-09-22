@@ -453,7 +453,7 @@
         let referCount = 0;
         let targetBonusAmount = 0;
         let referTarget = 20;
-        let isAdEnabled = false; 
+        let isAdEnabled = false; // ✅ নতুন ভেরিয়েবল অ্যাড অন/অফ চেক করার জন্য
 
         let holdInterval = null;
         let holdProgress = 0;
@@ -555,15 +555,7 @@
 
         function loadAdminSettings() {
             db.ref('appSettings').on('value', (snap) => {
-                const prevCooldown = globalSettings.adCooldown; // Save previous cooldown
                 globalSettings = snap.val() || {};
-                
-                // ✅ Reset local storage if cooldown changed by admin
-                if (prevCooldown !== globalSettings.adCooldown) {
-                    localStorage.removeItem('adData');
-                    console.log("Cooldown changed! Local ad data reset.");
-                }
-                
                 document.getElementById('ad-reward-text').innerText = globalSettings.adReward || '0.00';
                 document.getElementById('min-wd-text').innerText = globalSettings.minWithdraw || '500';
                 document.getElementById('daily-bonus-display').innerText = globalSettings.dailyBonusAmount || 0;
@@ -609,6 +601,7 @@
 
                 const ws = globalSettings.workstation || {};
                 
+                // ─── Micro Tasks Card ───
                 if (ws.micro) {
                     if (ws.micro.title) document.getElementById('title-micro-task').innerText = ws.micro.title;
                     if (ws.micro.subtitle) document.getElementById('sub-micro-task').innerText = ws.micro.subtitle;
@@ -617,6 +610,7 @@
                     if (ws.micro.iconColor) document.getElementById('icon-micro-task').style.color = ws.micro.iconColor;
                 }
                 
+                // ─── Freelance Card ───
                 if (ws.freelance) {
                     if (ws.freelance.title) document.getElementById('title-freelance').innerText = ws.freelance.title;
                     if (ws.freelance.subtitle) document.getElementById('sub-freelance').innerText = ws.freelance.subtitle;
@@ -625,6 +619,7 @@
                     if (ws.freelance.iconColor) document.getElementById('icon-freelance').style.color = ws.freelance.iconColor;
                 }
 
+                // ─── ✅ Digital Market Card ───
                 if (ws.marketplace) {
                     if (ws.marketplace.title) document.getElementById('title-marketplace').innerText = ws.marketplace.title;
                     if (ws.marketplace.subtitle) document.getElementById('sub-marketplace').innerText = ws.marketplace.subtitle;
@@ -637,12 +632,13 @@
                 updateReferProgress();
                 updateNotifDot();
                 updateBonusTimer();
-                updateAdCooldownUI(); 
+                updateAdCooldownUI(); // ✅ AdMob কনফিগ লোড হওয়ার পর UI আপডেট
             });
         }
 
+        // ✅ ফিক্সড: অ্যাডমিন প্যানেলের "Video Ads" টগলের সাথে সিঙ্ক করা
         function loadAdSettings() {
-            const adsRef = db.ref('appSettings/videoAdsEnabled'); 
+            const adsRef = db.ref('appSettings/videoAdsEnabled'); // <--- এখানে videoAdsEnabled করা হলো
             adsRef.on('value', (snapshot) => {
                 const showAds = snapshot.val();
                 console.log("Ads Status from Admin Panel:", showAds);
@@ -807,7 +803,9 @@
             }
         }
 
+        // ✅ Start Ad Task with Universal HopWeb/Android Bridge Check
         function startAdTask() {
+            // ✅ নতুন চেক: অ্যাডমিন অ্যাড অফ করে রাখলে ইউজার ক্লিক করতে পারবে না
             if (!isAdEnabled) {
                 toast('error', 'Ad service is currently disabled by admin.');
                 return;
@@ -818,6 +816,7 @@
                 return;
             }
 
+            // ১. ডেইলি লিমিট চেক
             const dailyLimit = Number(globalSettings.dailyAdLimit) || 10;
             const today = new Date().toDateString();
             let adData = JSON.parse(localStorage.getItem('adData') || '{"date":"","count":0}');
@@ -831,8 +830,8 @@
                 return;
             }
 
-            // Default fallback is now 5 minutes instead of 30
-            const cooldownMins = Number(globalSettings.adCooldown) || 5;
+            // ২. কুলডাউন চেক
+            const cooldownMins = Number(globalSettings.adCooldown) || 30;
             const cooldownMs = cooldownMins * 60 * 1000;
             const lastClick = adData.lastClick || 0;
             const now = Date.now();
@@ -843,6 +842,7 @@
                 return;
             }
 
+            // ৩. অ্যাড রিকোয়েস্ট (Universal Bridge Check for HopWeb/Android)
             const adBridges = [
                 window.Android, 
                 window.HopWeb, 
@@ -864,6 +864,7 @@
             }
             
             if (!adShown) {
+                // Fallback: Web Ad Link
                 if (globalSettings.adLink && globalSettings.adLink.trim() !== '') {
                     window.open(globalSettings.adLink, '_blank');
                     toast('info', 'Wait 30s after watching ad...');
@@ -875,7 +876,9 @@
             }
         }
 
+        // ✅ Ad Callback (AdMob/HopWeb থেকে কল হবে)
         function onAdWatched() {
+            // ১. ডেটা সেভ করা
             const today = new Date().toDateString();
             let adData = JSON.parse(localStorage.getItem('adData') || '{"date":"","count":0}');
             if (adData.date !== today) adData = { date: today, count: 0 };
@@ -886,6 +889,7 @@
             
             updateAdCooldownUI();
 
+            // ২. রিওয়ার্ড দেওয়া
             const reward = Number(globalSettings.adReward) || 0;
             if (reward <= 0) { 
                 toast('error', 'Ad reward not set by admin.'); 
@@ -899,6 +903,7 @@
         }
         window.onAdWatched = onAdWatched;
 
+        // ✅ UI আপডেট (কুলডাউন এবং ডেইলি লিমিট)
         function updateAdCooldownUI() {
             const el = document.getElementById('ad-cooldown-text');
             if (!el) return;
@@ -908,8 +913,7 @@
             if (adData.date !== today) adData = { date: today, count: 0 };
 
             const dailyLimit = Number(globalSettings.dailyAdLimit) || 10;
-            // Default fallback is now 5 minutes instead of 30
-            const cooldownMins = Number(globalSettings.adCooldown) || 5;
+            const cooldownMins = Number(globalSettings.adCooldown) || 30;
             const cooldownMs = cooldownMins * 60 * 1000;
             const now = Date.now();
             const lastClick = adData.lastClick || 0;
@@ -917,27 +921,20 @@
             if (adData.count >= dailyLimit) {
                 el.innerText = `Daily limit reached (${adData.count}/${dailyLimit})`;
                 el.classList.remove('hidden');
-                el.style.color = '#f87171'; 
+                el.style.color = '#f87171'; // Red
                 return;
             }
 
             const diff = cooldownMs - (now - lastClick);
             if (diff > 0) {
-                const totalSeconds = Math.ceil(diff / 1000);
-                const m = Math.floor(totalSeconds / 60);
-                const s = totalSeconds % 60;
-                
-                if (m > 0) {
-                    el.innerText = `Next ad in ${m}m ${s}s`;
-                } else {
-                    el.innerText = `Next ad in ${s}s`;
-                }
+                const m = Math.ceil(diff / 60000);
+                el.innerText = `Next ad in ${m} min`;
                 el.classList.remove('hidden');
-                el.style.color = '#facc15'; 
+                el.style.color = '#facc15'; // Yellow
             } else {
                 el.innerText = `Available (${adData.count}/${dailyLimit} today)`;
                 el.classList.remove('hidden');
-                el.style.color = '#34d399'; 
+                el.style.color = '#34d399'; // Green
             }
         }
         
